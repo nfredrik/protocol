@@ -1,0 +1,109 @@
+
+from DataObject import *
+from Protocol import *
+from PacketGenerator import *
+from PacketInterpreter import *
+
+import sys
+import struct
+import binascii
+
+import threading
+
+
+import time
+
+
+## http://www.doughellmann.com/PyMOTW/struct/index.html#module-struct
+
+
+# TODO : Figure out how to doi this in a unit test maner
+#
+#
+
+class TrafficGenerator(object):
+    def __init__(self, protocol):
+         self.m_protocol = protocol
+         self.m_protocol.connectCallback(self.signalOnPacket)
+         self.m_gen = PacketGenerator()
+         self.m_interpret = PacketInterpreter()
+         self.m_packetCounter = 0
+         self.event = threading.Event()
+
+
+    def generateSnow(self):
+         query  = self.m_gen.generateStartProcedure()
+         self.event.clear()
+         self.m_protocol.ResetState()
+         self.m_protocol.Send(query)
+         self.event.wait(3)
+         
+    def stopgenerateSnow(self):    
+         self.query = self.m_gen.stopProcedure()
+         self.event.clear()
+         self.m_protocol.ResetState()
+         self.m_protocol.Send(self.query)
+         self.event.wait(3)
+
+    def signalOnPacket(self,  packet):
+
+         if  self.m_packetCounter == 0:
+             if (self.m_interpret.getStartProduceResponse(packet)):
+                 print "we got a startprocedure response!"
+                 self.m_packetCounter += 1
+                 self.event.set()
+             else:
+                 print "we got an invalid packet, not startprocedure response!!"
+
+         elif  self.m_packetCounter == 1: 
+
+          if (self.m_interpret.getStopProduceResponse(packet)):
+                 print "we got a stopprocedure response!"
+                 self.event.set()
+          else:
+                 print "we got an invalid packet, not stopprocedure response!!"
+
+    def eventIsSet(self):
+          return self.event.isSet()    
+
+#
+# main
+#
+
+
+# Pick a data object. Could be anything, a Loopback object or a SerialPort or something else
+
+io = NewLoopDataObject()
+#io = SerialWrapper('/dev/pts/2')
+#io.start()
+
+
+# Picka a Protocol. Make a prototype and check different techniques...
+protocol = LenkoProtocol(io)
+#protocol = BinaryProtocol(io)
+
+
+
+generator = TrafficGenerator(protocol)
+
+
+generator.generateSnow()
+
+#generator.event.wait(3)
+
+
+# Use unit test here !!!!!
+if generator.eventIsSet():
+    print 'we got an event set'
+else:
+    print 'we got no avent ....'
+
+generator.stopgenerateSnow()
+
+if generator.eventIsSet():
+    print 'we got an event set'
+else:
+    print 'we got no avent ....'
+
+
+
